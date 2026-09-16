@@ -1,51 +1,52 @@
-name: Build Android APK
+name: Build Native Android APK
 
 on:
   push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
+    name: Generate Android Debug APK
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      - name: Set up Node.js LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
 
-    - name: Install Dependencies
-      run: npm install
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
 
-    - name: Build Web App Bundle
-      run: npm run build
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - name: Install NPM Dependencies
+        run: npm ci
 
-    - name: Initialize Capacitor Android (if not present)
-      run: npx cap add android || true
+      - name: Build Web Production Assets
+        run: npm run build
 
-    - name: Sync Capacitor with Web Assets
-      run: npx cap sync android
+      - name: Sync Capacitor Android Project
+        run: npx cap sync android
 
-    - name: Build Debug APK with Gradle
-      working-directory: ./android
-      run: ./gradlew assembleDebug
+      - name: Build Debug APK with Gradle
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: AutoCAD-Ram-apk
-        path: android/app/build/outputs/apk/debug/AutoCAD-Ram.apk
-        
+      - name: Upload APK as Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAD-Viewer-Editor-Debug-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
