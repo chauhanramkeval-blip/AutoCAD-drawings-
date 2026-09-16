@@ -1,0 +1,6 @@
+{
+  "name": "CAD Viewer",
+  "description": "Interactive CAD and DXF drawing viewer with full DXF parsing, layer controls, distance, area, angle, and radius measurement tools, and precision pan/zoom canvas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
