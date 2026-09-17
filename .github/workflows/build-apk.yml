@@ -24,18 +24,18 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '9.3.1'
+          cache-disabled: false
 
       - name: Prepare Secrets & Environment Files
         run: |
-          # Ensure root .env and .env.example exist
           touch .env
           echo "GEMINI_API_KEY=" >> .env
           if [ ! -f .env.example ]; then
             touch .env.example
             echo "GEMINI_API_KEY=" >> .env.example
           fi
-
-          # Ensure app/.env exists if app directory is present
           if [ -d "app" ]; then
             touch app/.env
             echo "GEMINI_API_KEY=" >> app/.env
@@ -43,12 +43,10 @@ jobs:
 
       - name: Ensure Debug Keystore Exists
         run: |
-          # 1. Try decoding from base64 if present
           if [ -f "debug.keystore.base64" ]; then
             base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || true
           fi
           
-          # 2. If debug.keystore is still missing or empty, generate a fresh one
           if [ ! -s "debug.keystore" ]; then
             keytool -genkey -v \
               -keystore debug.keystore \
@@ -61,28 +59,28 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-          # 3. Copy to app directory as well for subproject resolution safety
           if [ -d "app" ]; then
             cp debug.keystore app/debug.keystore 2>/dev/null || true
           fi
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android SDK Licenses & Install Platforms
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses 2>/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" 2>/dev/null || true
 
-      - name: Make Gradle Wrapper Executable
+      - name: Generate Gradle Wrapper if Missing
         run: |
+          if [ ! -f "./gradlew" ]; then
+            gradle wrapper --gradle-version 9.3.1 || true
+          fi
           chmod +x ./gradlew 2>/dev/null || true
-          chmod +x ./android/gradlew 2>/dev/null || true
 
       - name: Build Debug APK with Gradle
         run: |
           if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --stacktrace --no-daemon -Dorg.gradle.configuration-cache=false
-          elif [ -f "./android/gradlew" ]; then
-            cd android && ./gradlew assembleDebug --stacktrace --no-daemon -Dorg.gradle.configuration-cache=false
+            ./gradlew assembleDebug --stacktrace --no-daemon
           else
-            gradle assembleDebug --stacktrace --no-daemon -Dorg.gradle.configuration-cache=false
+            gradle assembleDebug --stacktrace --no-daemon
           fi
 
       - name: Upload Generated APK Artifact
@@ -91,6 +89,5 @@ jobs:
           name: CAD-Viewer-Debug-APK
           path: |
             app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14

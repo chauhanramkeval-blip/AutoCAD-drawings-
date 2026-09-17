@@ -2,6 +2,7 @@ package com.example.measurement
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import com.example.canvas.GridSettings
 import com.example.canvas.ViewportState
 import com.example.parser.*
 import kotlin.math.*
@@ -15,7 +16,8 @@ enum class SnapMode(val displayName: String, val symbol: String) {
     NEAREST("Nearest", "⧖"),
     QUADRANT("Quadrant", "◇"),
     TANGENT("Tangent", "⌒"),
-    NODE("Node (Point)", "•")
+    NODE("Node (Point)", "•"),
+    GRID_NODE("Grid Snap", "⊞")
 }
 
 enum class OrthoMode(val displayName: String) {
@@ -68,9 +70,10 @@ object SnapEngine {
         layerVisibility: Map<String, Boolean>,
         viewport: ViewportState,
         settings: SnapSettings,
-        referencePoint: Point2D? = null
+        referencePoint: Point2D? = null,
+        gridSettings: GridSettings? = null
     ): SnapResult? {
-        if (!settings.isEnabled) return null
+        if (!settings.isEnabled && gridSettings?.isSnapToGrid != true) return null
 
         val toleranceWorld = settings.snapTolerancePx / viewport.scale
         var bestSnap: SnapResult? = null
@@ -78,11 +81,27 @@ object SnapEngine {
 
         // Helper to check and record a candidate snap point
         fun checkCandidate(point: Point2D, mode: SnapMode, entity: DxfEntity?, desc: String) {
-            if (!settings.activeModes.contains(mode)) return
+            if (!settings.activeModes.contains(mode) && !(mode == SnapMode.GRID_NODE && gridSettings?.isSnapToGrid == true)) return
             val d = cursorWorld.distanceTo(point)
             if (d < minDistance) {
                 minDistance = d
                 bestSnap = SnapResult(point, mode, entity, desc)
+            }
+        }
+
+        // 0. Grid Snap candidate
+        if (gridSettings != null && gridSettings.isVisible && (gridSettings.isSnapToGrid || settings.activeModes.contains(SnapMode.GRID_NODE))) {
+            val snapStep = gridSettings.computeSnapStep(viewport.scale)
+            if (snapStep > 0.00001f) {
+                val gx = round(cursorWorld.x / snapStep) * snapStep
+                val gy = round(cursorWorld.y / snapStep) * snapStep
+                val gPoint = Point2D(gx, gy)
+                val d = cursorWorld.distanceTo(gPoint)
+                val gridTolerance = if (gridSettings.isSnapToGrid) (settings.snapTolerancePx * 1.5f) / viewport.scale else toleranceWorld
+                if (d < gridTolerance) {
+                    minDistance = d
+                    bestSnap = SnapResult(gPoint, SnapMode.GRID_NODE, null, "Grid Snap (%.2f, %.2f)".format(gx, gy))
+                }
             }
         }
 

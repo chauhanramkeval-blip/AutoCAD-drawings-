@@ -2,33 +2,51 @@ package com.example.measurement
 
 import com.example.parser.Point2D
 import java.util.Locale
-import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-enum class DistanceUnit(val symbol: String, val displayName: String, val toMeters: Double) {
-    MILLIMETERS("mm", "Millimeters (mm)", 0.001),
-    CENTIMETERS("cm", "Centimeters (cm)", 0.01),
-    METERS("m", "Meters (m)", 1.0),
-    KILOMETERS("km", "Kilometers (km)", 1000.0),
-    INCHES("in", "Inches (in)", 0.0254),
-    FEET("ft", "Feet (ft)", 0.3048),
-    YARDS("yd", "Yards (yd)", 0.9144);
+enum class UnitSystem(val displayName: String, val shortName: String, val description: String) {
+    METRIC("Metric System", "Metric (mm/m)", "Millimeters, Centimeters, Meters, Kilometers (mm, cm, m, km, m²)"),
+    IMPERIAL("Imperial System", "Imperial (in/ft)", "Inches, Feet, Yards (in, ft, yd, in², ft²)")
+}
+
+enum class DistanceUnit(
+    val symbol: String,
+    val displayName: String,
+    val toMeters: Double,
+    val system: UnitSystem
+) {
+    MILLIMETERS("mm", "Millimeters (mm)", 0.001, UnitSystem.METRIC),
+    CENTIMETERS("cm", "Centimeters (cm)", 0.01, UnitSystem.METRIC),
+    METERS("m", "Meters (m)", 1.0, UnitSystem.METRIC),
+    KILOMETERS("km", "Kilometers (km)", 1000.0, UnitSystem.METRIC),
+    INCHES("in", "Inches (in)", 0.0254, UnitSystem.IMPERIAL),
+    FEET("ft", "Feet (ft)", 0.3048, UnitSystem.IMPERIAL),
+    YARDS("yd", "Yards (yd)", 0.9144, UnitSystem.IMPERIAL);
 
     companion object {
         fun fromSymbol(sym: String): DistanceUnit =
             entries.find { it.symbol.equals(sym, ignoreCase = true) } ?: METERS
+
+        fun forSystem(system: UnitSystem): List<DistanceUnit> =
+            entries.filter { it.system == system }
     }
 }
 
-enum class AreaUnit(val symbol: String, val displayName: String, val toSquareMeters: Double) {
-    SQ_MILLIMETERS("mm²", "Square Millimeters (mm²)", 0.000001),
-    SQ_CENTIMETERS("cm²", "Square Centimeters (cm²)", 0.0001),
-    SQ_METERS("m²", "Square Meters (m²)", 1.0),
-    SQ_KILOMETERS("km²", "Square Kilometers (km²)", 1000000.0),
-    SQ_INCHES("in²", "Square Inches (in²)", 0.00064516),
-    SQ_FEET("ft²", "Square Feet (ft²)", 0.09290304),
-    SQ_YARDS("yd²", "Square Yards (yd²)", 0.83612736);
+enum class AreaUnit(
+    val symbol: String,
+    val displayName: String,
+    val toSquareMeters: Double,
+    val system: UnitSystem
+) {
+    SQ_MILLIMETERS("mm²", "Square Millimeters (mm²)", 0.000001, UnitSystem.METRIC),
+    SQ_CENTIMETERS("cm²", "Square Centimeters (cm²)", 0.0001, UnitSystem.METRIC),
+    SQ_METERS("m²", "Square Meters (m²)", 1.0, UnitSystem.METRIC),
+    SQ_KILOMETERS("km²", "Square Kilometers (km²)", 1000000.0, UnitSystem.METRIC),
+    SQ_INCHES("in²", "Square Inches (in²)", 0.00064516, UnitSystem.IMPERIAL),
+    SQ_FEET("ft²", "Square Feet (ft²)", 0.09290304, UnitSystem.IMPERIAL),
+    SQ_YARDS("yd²", "Square Yards (yd²)", 0.83612736, UnitSystem.IMPERIAL);
 
     companion object {
         fun fromDistanceUnit(dist: DistanceUnit): AreaUnit {
@@ -42,6 +60,9 @@ enum class AreaUnit(val symbol: String, val displayName: String, val toSquareMet
                 DistanceUnit.YARDS -> SQ_YARDS
             }
         }
+
+        fun forSystem(system: UnitSystem): List<AreaUnit> =
+            entries.filter { it.system == system }
     }
 }
 
@@ -52,7 +73,22 @@ enum class AngleUnit(val symbol: String, val displayName: String) {
     DMS("DMS", "Deg/Min/Sec (D°M'S\")")
 }
 
+enum class UnitPreset(
+    val title: String,
+    val system: UnitSystem,
+    val baseUnit: DistanceUnit,
+    val distanceUnit: DistanceUnit,
+    val areaUnit: AreaUnit,
+    val description: String
+) {
+    METRIC_MM("Metric (mm / mm²)", UnitSystem.METRIC, DistanceUnit.MILLIMETERS, DistanceUnit.MILLIMETERS, AreaUnit.SQ_MILLIMETERS, "Millimeters (Mechanical & Fabrication)"),
+    METRIC_M("Metric (m / m²)", UnitSystem.METRIC, DistanceUnit.MILLIMETERS, DistanceUnit.METERS, AreaUnit.SQ_METERS, "Meters (Architectural & Civil)"),
+    IMPERIAL_IN("Imperial (in / in²)", UnitSystem.IMPERIAL, DistanceUnit.INCHES, DistanceUnit.INCHES, AreaUnit.SQ_INCHES, "Inches (Mechanical & Manufacturing)"),
+    IMPERIAL_FT("Imperial (ft / ft²)", UnitSystem.IMPERIAL, DistanceUnit.INCHES, DistanceUnit.FEET, AreaUnit.SQ_FEET, "Feet (Architectural & Construction)")
+}
+
 data class UnitConfig(
+    val unitSystem: UnitSystem = UnitSystem.METRIC,
     val baseDrawingUnit: DistanceUnit = DistanceUnit.MILLIMETERS,
     val displayDistanceUnit: DistanceUnit = DistanceUnit.MILLIMETERS,
     val displayAreaUnit: AreaUnit = AreaUnit.SQ_MILLIMETERS,
@@ -69,6 +105,33 @@ data class UnitConfig(
             4 -> "%.4f"
             else -> "%.2f"
         }
+
+    fun withSystem(system: UnitSystem): UnitConfig {
+        return if (system == UnitSystem.METRIC) {
+            copy(
+                unitSystem = UnitSystem.METRIC,
+                baseDrawingUnit = DistanceUnit.MILLIMETERS,
+                displayDistanceUnit = DistanceUnit.MILLIMETERS,
+                displayAreaUnit = AreaUnit.SQ_MILLIMETERS
+            )
+        } else {
+            copy(
+                unitSystem = UnitSystem.IMPERIAL,
+                baseDrawingUnit = DistanceUnit.INCHES,
+                displayDistanceUnit = DistanceUnit.INCHES,
+                displayAreaUnit = AreaUnit.SQ_INCHES
+            )
+        }
+    }
+
+    fun withPreset(preset: UnitPreset): UnitConfig {
+        return copy(
+            unitSystem = preset.system,
+            baseDrawingUnit = preset.baseUnit,
+            displayDistanceUnit = preset.distanceUnit,
+            displayAreaUnit = preset.areaUnit
+        )
+    }
 }
 
 object UnitManager {
@@ -81,6 +144,17 @@ object UnitManager {
     ): Double {
         val inBaseMeters = (cadValue.toDouble() * scale) * fromBase.toMeters
         return inBaseMeters / toTarget.toMeters
+    }
+
+    fun parseToCadUnits(
+        displayValue: Float,
+        baseUnit: DistanceUnit,
+        displayUnit: DistanceUnit,
+        scale: Float = 1.0f
+    ): Float {
+        val inMeters = displayValue.toDouble() * displayUnit.toMeters
+        val baseVal = inMeters / baseUnit.toMeters
+        return (baseVal / scale).toFloat()
     }
 
     fun convertArea(
@@ -102,6 +176,25 @@ object UnitManager {
     fun formatArea(cadArea: Float, config: UnitConfig): String {
         val converted = convertArea(cadArea, config.baseDrawingUnit, config.displayAreaUnit, config.drawingScale)
         return String.format(Locale.US, "${config.precisionPattern} %s", converted, config.displayAreaUnit.symbol)
+    }
+
+    /**
+     * Dual unit display: shows primary measurement + equivalent in opposite system (Metric <-> Imperial)
+     */
+    fun formatDualDistance(cadValue: Float, config: UnitConfig): String {
+        val primary = formatDistance(cadValue, config)
+        val altUnit = if (config.unitSystem == UnitSystem.METRIC) DistanceUnit.INCHES else DistanceUnit.MILLIMETERS
+        val altConverted = convertDistance(cadValue, config.baseDrawingUnit, altUnit, config.drawingScale)
+        val altStr = String.format(Locale.US, "${config.precisionPattern} %s", altConverted, altUnit.symbol)
+        return "$primary ($altStr)"
+    }
+
+    fun formatDualArea(cadArea: Float, config: UnitConfig): String {
+        val primary = formatArea(cadArea, config)
+        val altAreaUnit = if (config.unitSystem == UnitSystem.METRIC) AreaUnit.SQ_FEET else AreaUnit.SQ_METERS
+        val altConverted = convertArea(cadArea, config.baseDrawingUnit, altAreaUnit, config.drawingScale)
+        val altStr = String.format(Locale.US, "${config.precisionPattern} %s", altConverted, altAreaUnit.symbol)
+        return "$primary ($altStr)"
     }
 
     fun formatAngle(angleDeg: Float, config: UnitConfig): String {
@@ -140,10 +233,12 @@ object UnitManager {
         val prefix = if (relativeTo != null) "@" else ""
         return String.format(
             Locale.US,
-            "%sX: ${config.precisionPattern}  Y: ${config.precisionPattern}  Z: ${config.precisionPattern} %s",
+            "%sX: ${config.precisionPattern} %s, Y: ${config.precisionPattern} %s, Z: ${config.precisionPattern} %s",
             prefix,
             xVal,
+            config.displayDistanceUnit.symbol,
             yVal,
+            config.displayDistanceUnit.symbol,
             zVal,
             config.displayDistanceUnit.symbol
         )

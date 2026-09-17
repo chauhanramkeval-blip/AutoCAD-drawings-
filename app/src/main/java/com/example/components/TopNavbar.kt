@@ -21,6 +21,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.foundation.clickable
+import com.example.measurement.UnitConfig
+import com.example.measurement.UnitSystem
+
 /**
  * Android Jetpack Compose implementation of TopNavbar component.
  * Mirrors the React specification with Top Header row (Title, DXF badge, Subtitle, Quick Actions)
@@ -31,6 +35,7 @@ fun TopNavbar(
     fileName: String,
     entityCount: Int,
     isDarkMode: Boolean,
+    unitConfig: UnitConfig = UnitConfig(),
     onToggleTheme: () -> Unit,
     onSelectAction: (action: String, payload: Any?) -> Unit,
     modifier: Modifier = Modifier
@@ -108,6 +113,38 @@ fun TopNavbar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    // Global Units Badge Quick Button
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (unitConfig.unitSystem == UnitSystem.METRIC) Color(0xFF0284C7).copy(alpha = 0.25f) else Color(0xFFD97706).copy(alpha = 0.25f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (unitConfig.unitSystem == UnitSystem.METRIC) Color(0xFF38BDF8) else Color(0xFFFBBF24)
+                        ),
+                        modifier = Modifier
+                            .clickable { onSelectAction("measure-units-settings", null) }
+                            .testTag("btn_quick_unit_settings")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Straighten,
+                                contentDescription = "Units Settings",
+                                tint = if (unitConfig.unitSystem == UnitSystem.METRIC) Color(0xFF38BDF8) else Color(0xFFFBBF24),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${if (unitConfig.unitSystem == UnitSystem.METRIC) "METRIC" else "IMP"} (${unitConfig.displayDistanceUnit.symbol})",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
                     // Import Image / Background
                     IconButton(
                         onClick = { onSelectAction("import-image", null) },
@@ -346,6 +383,36 @@ fun TopNavbar(
                             .border(1.dp, Color(0xFF374151), RoundedCornerShape(8.dp))
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Grid Settings & Opacity...", color = Color(0xFF38BDF8), fontSize = 13.sp, fontWeight = FontWeight.Bold) },
+                            leadingIcon = {
+                                Icon(Icons.Default.GridOn, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                            },
+                            onClick = {
+                                activeMenu = null
+                                onSelectAction("grid-settings", null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Toggle Grid", color = Color.White, fontSize = 13.sp) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Visibility, contentDescription = null, tint = Color(0xFF9CA3AF), modifier = Modifier.size(16.dp))
+                            },
+                            onClick = {
+                                activeMenu = null
+                                onSelectAction("toggle-grid", null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Toggle Axes", color = Color.White, fontSize = 13.sp) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Explore, contentDescription = null, tint = Color(0xFF69F0AE), modifier = Modifier.size(16.dp))
+                            },
+                            onClick = {
+                                activeMenu = null
+                                onSelectAction("toggle-axes", null)
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Fit to Screen", color = Color.White, fontSize = 13.sp) },
                             leadingIcon = {
                                 Icon(Icons.Default.Fullscreen, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(16.dp))
@@ -355,14 +422,51 @@ fun TopNavbar(
                                 onSelectAction("fit-view", null)
                             }
                         )
+                    }
+                }
+
+                // GRID MENU TAB
+                Box {
+                    NavMenuTab(
+                        title = "Grid",
+                        isActive = activeMenu == "grid",
+                        onClick = { activeMenu = if (activeMenu == "grid") null else "grid" }
+                    )
+                    DropdownMenu(
+                        expanded = activeMenu == "grid",
+                        onDismissRequest = { activeMenu = null },
+                        modifier = Modifier
+                            .background(Color(0xFF111827))
+                            .border(1.dp, Color(0xFF374151), RoundedCornerShape(8.dp))
+                    ) {
                         DropdownMenuItem(
-                            text = { Text("Toggle Grid", color = Color.White, fontSize = 13.sp) },
+                            text = { Text("⚙️ Grid & Snap Settings...", color = Color(0xFF38BDF8), fontSize = 13.sp, fontWeight = FontWeight.Bold) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Tune, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                            },
+                            onClick = {
+                                activeMenu = null
+                                onSelectAction("grid-settings", null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Toggle Grid On/Off", color = Color.White, fontSize = 13.sp) },
                             leadingIcon = {
                                 Icon(Icons.Default.GridOn, contentDescription = null, tint = Color(0xFF9CA3AF), modifier = Modifier.size(16.dp))
                             },
                             onClick = {
                                 activeMenu = null
                                 onSelectAction("toggle-grid", null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Toggle Grid Snap Magnet", color = Color.White, fontSize = 13.sp) },
+                            leadingIcon = {
+                                Icon(Icons.Default.TrackChanges, contentDescription = null, tint = Color(0xFFFBBF24), modifier = Modifier.size(16.dp))
+                            },
+                            onClick = {
+                                activeMenu = null
+                                onSelectAction("toggle-grid-snap", null)
                             }
                         )
                     }
@@ -396,7 +500,29 @@ fun TopNavbar(
                                 onSelectAction("measure-area", null)
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text("⚙️ Global Units & Scale...", color = Color(0xFF38BDF8), fontSize = 13.sp, fontWeight = FontWeight.Bold) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Straighten, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                            },
+                            onClick = {
+                                activeMenu = null
+                                onSelectAction("measure-units-settings", null)
+                            }
+                        )
                     }
+                }
+
+                // UNITS & SETTINGS MENU TAB
+                Box {
+                    NavMenuTab(
+                        title = "Units",
+                        isActive = activeMenu == "units",
+                        onClick = {
+                            activeMenu = null
+                            onSelectAction("measure-units-settings", null)
+                        }
+                    )
                 }
 
                 // LAYERS MENU

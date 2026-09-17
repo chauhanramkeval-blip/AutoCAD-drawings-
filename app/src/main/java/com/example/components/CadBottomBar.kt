@@ -16,6 +16,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.example.canvas.GridSettings
+import com.example.measurement.UnitConfig
+import com.example.measurement.UnitManager
+import com.example.measurement.UnitSystem
 import com.example.parser.Point2D
 import com.example.store.CadTool
 
@@ -28,6 +34,8 @@ fun CadBottomBar(
     showAxes: Boolean,
     visibleLayerCount: Int,
     totalLayerCount: Int,
+    unitConfig: UnitConfig = UnitConfig(),
+    gridSettings: GridSettings? = null,
     onSetTool: (CadTool) -> Unit,
     onOpenLayers: () -> Unit,
     onFitExtents: () -> Unit,
@@ -35,6 +43,8 @@ fun CadBottomBar(
     onZoomOut: () -> Unit,
     onToggleGrid: () -> Unit,
     onToggleAxes: () -> Unit,
+    onOpenUnitSettings: (() -> Unit)? = null,
+    onOpenGridSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -50,27 +60,70 @@ fun CadBottomBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF071220))
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Live CAD Coordinates
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Live CAD Coordinates & Clickable Unit Badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(7.dp)
                             .clip(CircleShape)
                             .background(Color(0xFF00E5FF))
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+
+                    val curX = UnitManager.convertDistance(cursorCoords.x, unitConfig.baseDrawingUnit, unitConfig.displayDistanceUnit, unitConfig.drawingScale)
+                    val curY = UnitManager.convertDistance(cursorCoords.y, unitConfig.baseDrawingUnit, unitConfig.displayDistanceUnit, unitConfig.drawingScale)
+                    val coordStr = "X: ${unitConfig.precisionPattern.format(curX)} ${unitConfig.displayDistanceUnit.symbol}  Y: ${unitConfig.precisionPattern.format(curY)} ${unitConfig.displayDistanceUnit.symbol}"
+
                     Text(
-                        text = "X: %.1f  Y: %.1f".format(cursorCoords.x, cursorCoords.y),
+                        text = coordStr,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = FontFamily.Monospace,
                             color = Color(0xFF90A4AE),
                             fontSize = 11.sp
                         )
                     )
+
+                    // Unit Pill
+                    Surface(
+                        color = if (unitConfig.unitSystem == UnitSystem.METRIC) Color(0x330284C7) else Color(0x33D97706),
+                        shape = RoundedCornerShape(3.dp),
+                        modifier = Modifier
+                            .clickable(enabled = onOpenUnitSettings != null) { onOpenUnitSettings?.invoke() }
+                            .testTag("btn_bottom_unit_pill")
+                    ) {
+                        Text(
+                            text = unitConfig.displayDistanceUnit.symbol,
+                            color = if (unitConfig.unitSystem == UnitSystem.METRIC) Color(0xFF38BDF8) else Color(0xFFFBBF24),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+
+                    // Grid Snap Pill (if enabled)
+                    if (gridSettings?.isSnapToGrid == true) {
+                        Surface(
+                            color = Color(0x33F59E0B),
+                            shape = RoundedCornerShape(3.dp),
+                            modifier = Modifier
+                                .clickable(enabled = onOpenGridSettings != null) { onOpenGridSettings?.invoke() }
+                                .testTag("btn_bottom_grid_snap_pill")
+                        ) {
+                            Text(
+                                text = "SNAP:${gridSettings.snapFrequency.shortLabel}",
+                                color = Color(0xFFFBBF24),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
                 }
 
                 // Quick Viewport Actions (Grid, Axes, Zoom -, Zoom +, Fit)
@@ -133,16 +186,22 @@ fun CadBottomBar(
 
                     Spacer(modifier = Modifier.width(4.dp))
 
-                    // Grid Toggle Icon
+                    // Grid Settings / Toggle Icon
                     IconButton(
-                        onClick = onToggleGrid,
+                        onClick = {
+                            if (onOpenGridSettings != null) {
+                                onOpenGridSettings()
+                            } else {
+                                onToggleGrid()
+                            }
+                        },
                         modifier = Modifier
                             .size(28.dp)
                             .testTag("btn_bottom_grid")
                     ) {
                         Icon(
                             Icons.Default.GridOn,
-                            contentDescription = "Toggle Grid",
+                            contentDescription = "Grid Settings",
                             tint = if (showGrid) Color(0xFF00E5FF) else Color(0x44FFFFFF),
                             modifier = Modifier.size(16.dp)
                         )

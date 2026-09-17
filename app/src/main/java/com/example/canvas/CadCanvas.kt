@@ -70,8 +70,8 @@ fun CadCanvas(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             // 1. Grid
-            if (uiState.showGrid) {
-                drawCadGrid(vp, uiState.isBlueprintTheme)
+            if (uiState.gridSettings.isVisible) {
+                drawCadGrid(vp, uiState.gridSettings, uiState.isBlueprintTheme, density)
             }
 
             // 2. Axes
@@ -520,6 +520,13 @@ private fun DrawScope.drawSnapMarker(
             }
             drawPath(path, color = snapColor, style = Stroke(width = 2.5f))
         }
+        SnapMode.GRID_NODE -> {
+            // Grid Plus with Box
+            val half = sizePx / 2f
+            drawRect(snapColor, topLeft = Offset(s.x - half, s.y - half), size = Size(sizePx, sizePx), style = Stroke(width = 2f))
+            drawLine(snapColor, Offset(s.x - half, s.y), Offset(s.x + half, s.y), strokeWidth = 1.5f)
+            drawLine(snapColor, Offset(s.x, s.y - half), Offset(s.x, s.y + half), strokeWidth = 1.5f)
+        }
         else -> {
             drawCircle(snapColor, radius = 6f, center = s, style = Stroke(width = 3f))
         }
@@ -725,19 +732,24 @@ private fun DrawScope.drawEntity(
     }
 }
 
-private fun DrawScope.drawCadGrid(vp: ViewportState, isBlueprint: Boolean) {
-    val fineGridColor = if (isBlueprint) Color(0x1500E5FF) else Color(0x18FFFFFF)
-    val majorGridColor = if (isBlueprint) Color(0x2800E5FF) else Color(0x33FFFFFF)
+private fun DrawScope.drawCadGrid(
+    vp: ViewportState,
+    gridSettings: GridSettings,
+    isBlueprint: Boolean,
+    density: Float
+) {
+    val baseColor = if (isBlueprint) Color(0xFF00E5FF) else Color(0xFFFFFFFF)
+    val opacity = gridSettings.lineOpacity.coerceIn(0.01f, 1.0f)
+    val majorOpacity = (opacity * gridSettings.majorOpacityMultiplier).coerceIn(0.01f, 1.0f)
 
-    val screenStep = 80f
-    val rawWorldStep = screenStep / vp.scale
-    val magnitude = 10f.pow(floor(log10(rawWorldStep)))
-    val normalized = rawWorldStep / magnitude
-    val worldStep = when {
-        normalized < 2f -> 1f * magnitude
-        normalized < 5f -> 2f * magnitude
-        else -> 5f * magnitude
-    }
+    val fineGridColor = baseColor.copy(alpha = opacity)
+    val majorGridColor = baseColor.copy(alpha = majorOpacity)
+
+    val worldStep = gridSettings.computeWorldGridStep(vp.scale)
+    if (worldStep <= 0f) return
+
+    val majorInterval = gridSettings.majorInterval.coerceAtLeast(2)
+    val majorStep = worldStep * majorInterval
 
     val topLeftWorld = vp.screenToWorld(Offset(0f, 0f))
     val bottomRightWorld = vp.screenToWorld(Offset(size.width, size.height))
@@ -752,34 +764,68 @@ private fun DrawScope.drawCadGrid(vp: ViewportState, isBlueprint: Boolean) {
     val startY = floor(minY / worldStep) * worldStep
     val endY = ceil(maxY / worldStep) * worldStep
 
-    var curX = startX
-    var countX = 0
-    while (curX <= endX && countX < 200) {
-        val sx = vp.worldToScreen(Point2D(curX, 0f)).x
-        val isMajor = (round(curX / (worldStep * 5)) * (worldStep * 5) == curX)
-        drawLine(
-            color = if (isMajor) majorGridColor else fineGridColor,
-            start = Offset(sx, 0f),
-            end = Offset(sx, size.height),
-            strokeWidth = if (isMajor) 1.2f else 0.8f
-        )
-        curX += worldStep
-        countX++
-    }
+    val dottedEffect = if (gridSettings.style == GridStyle.DOTTED) {
+        PathEffect.dashPathEffect(floatArrayOf(4f * density, 4f * density), 0f)
+    } else null
 
-    var curY = startY
-    var countY = 0
-    while (curY <= endY && countY < 200) {
-        val sy = vp.worldToScreen(Point2D(0f, curY)).y
-        val isMajor = (round(curY / (worldStep * 5)) * (worldStep * 5) == curY)
-        drawLine(
-            color = if (isMajor) majorGridColor else fineGridColor,
-            start = Offset(0f, sy),
-            end = Offset(size.width, sy),
-            strokeWidth = if (isMajor) 1.2f else 0.8f
-        )
-        curY += worldStep
-        countY++
+    if (gridSettings.style == GridStyle.DOT_GRID) {
+        var curX = startX
+        var countX = 0
+        while (curX <= endX && countX < 150) {
+            val sx = vp.worldToScreen(Point2D(curX, 0f)).x
+            var curY = startY
+            var countY = 0
+            val isMajorX = (round(curX / majorStep) * majorStep - curX).let { abs(it) < 0.001f * worldStep }
+
+            while (curY <= endY && countY < 150) {
+                val sy = vp.worldToScreen(Point2D(0f, curY)).y
+                val isMajorY = (round(curY / majorStep) * majorStep - curY).let { abs(it) < 0.001f * worldStep }
+                val isMajor = isMajorX && isMajorY
+
+                drawCircle(
+                    color = if (isMajor) majorGridColor else fineGridColor,
+                    radius = if (isMajor) 2.5f * density else 1.2f * density,
+                    center = Offset(sx, sy)
+                )
+                curY += worldStep
+                countY++
+            }
+            curX += worldStep
+            countX++
+        }
+    } else {
+        // Continuous or Dotted Lines
+        var curX = startX
+        var countX = 0
+        while (curX <= endX && countX < 250) {
+            val sx = vp.worldToScreen(Point2D(curX, 0f)).x
+            val isMajor = (round(curX / majorStep) * majorStep - curX).let { abs(it) < 0.001f * worldStep }
+            drawLine(
+                color = if (isMajor) majorGridColor else fineGridColor,
+                start = Offset(sx, 0f),
+                end = Offset(sx, size.height),
+                strokeWidth = if (isMajor) 1.2f * density else 0.7f * density,
+                pathEffect = dottedEffect
+            )
+            curX += worldStep
+            countX++
+        }
+
+        var curY = startY
+        var countY = 0
+        while (curY <= endY && countY < 250) {
+            val sy = vp.worldToScreen(Point2D(0f, curY)).y
+            val isMajor = (round(curY / majorStep) * majorStep - curY).let { abs(it) < 0.001f * worldStep }
+            drawLine(
+                color = if (isMajor) majorGridColor else fineGridColor,
+                start = Offset(0f, sy),
+                end = Offset(size.width, sy),
+                strokeWidth = if (isMajor) 1.2f * density else 0.7f * density,
+                pathEffect = dottedEffect
+            )
+            curY += worldStep
+            countY++
+        }
     }
 }
 

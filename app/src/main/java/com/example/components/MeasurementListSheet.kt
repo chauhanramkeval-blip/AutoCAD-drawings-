@@ -251,6 +251,7 @@ fun MeasurementListSheet(
                     items(records, key = { it.id }) { record ->
                         MeasurementItemCard(
                             record = record,
+                            unitConfig = unitConfig,
                             onToggleVisibility = { onToggleVisibility(record.id) },
                             onToggleHole = { onToggleHole(record.id) },
                             onZoomTo = { onZoomTo(record) },
@@ -268,6 +269,7 @@ fun MeasurementListSheet(
 @Composable
 private fun MeasurementItemCard(
     record: MeasurementRecord,
+    unitConfig: UnitConfig,
     onToggleVisibility: () -> Unit,
     onToggleHole: () -> Unit,
     onZoomTo: () -> Unit,

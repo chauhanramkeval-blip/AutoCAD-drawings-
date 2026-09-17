@@ -2,6 +2,7 @@ package com.example.store
 
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
+import com.example.canvas.GridSettings
 import com.example.canvas.ViewportState
 import com.example.measurement.*
 import com.example.parser.*
@@ -60,10 +61,12 @@ data class CadUiState(
     val activeMeasurement: MeasurementActiveState = MeasurementActiveState(),
     val savedMeasurements: List<MeasurementRecord> = emptyList(),
     val snapSettings: SnapSettings = SnapSettings(),
+    val gridSettings: GridSettings = GridSettings(),
     val unitConfig: UnitConfig = UnitConfig(),
     val isMeasurementManagerVisible: Boolean = false,
     val isSnapSettingsVisible: Boolean = false,
     val isUnitSettingsVisible: Boolean = false,
+    val isGridSettingsVisible: Boolean = false,
     val cursorCadCoords: Point2D = Point2D(0f, 0f),
     val showGrid: Boolean = true,
     val showAxes: Boolean = true,
@@ -240,7 +243,39 @@ class CadViewModel : ViewModel() {
     }
 
     fun toggleGrid() {
-        _uiState.update { it.copy(showGrid = !it.showGrid) }
+        _uiState.update { current ->
+            val newVisibility = !current.gridSettings.isVisible
+            current.copy(
+                showGrid = newVisibility,
+                gridSettings = current.gridSettings.copy(isVisible = newVisibility),
+                toastMessage = if (newVisibility) "Grid Enabled" else "Grid Disabled"
+            )
+        }
+    }
+
+    fun setGridSettings(settings: GridSettings) {
+        _uiState.update { current ->
+            current.copy(
+                gridSettings = settings,
+                showGrid = settings.isVisible,
+                toastMessage = "Grid settings updated"
+            )
+        }
+    }
+
+    fun showGridSettingsDialog(show: Boolean) {
+        _uiState.update { it.copy(isGridSettingsVisible = show) }
+    }
+
+    fun toggleGridSnap() {
+        _uiState.update { current ->
+            val nextSnap = !current.gridSettings.isSnapToGrid
+            val updated = current.gridSettings.copy(isSnapToGrid = nextSnap)
+            current.copy(
+                gridSettings = updated,
+                toastMessage = if (nextSnap) "Grid Snap Enabled (${updated.snapFrequency.shortLabel})" else "Grid Snap Disabled"
+            )
+        }
     }
 
     fun toggleAxes() {
@@ -305,13 +340,45 @@ class CadViewModel : ViewModel() {
 
     fun setUnitConfig(config: UnitConfig) {
         _uiState.update { current ->
-            val updated = current.copy(unitConfig = config)
+            // Recalculate saved measurements with updated unit system
+            val updatedSaved = current.savedMeasurements.map { record ->
+                val newFormatted = when (record.toolType) {
+                    MeasureToolType.AREA_POLYGON,
+                    MeasureToolType.AREA_RECTANGLE,
+                    MeasureToolType.AREA_BOUNDARY,
+                    MeasureToolType.TOTAL_AREA -> UnitManager.formatArea(record.primaryValue.toFloat(), config)
+
+                    MeasureToolType.DISTANCE,
+                    MeasureToolType.HORIZONTAL,
+                    MeasureToolType.VERTICAL,
+                    MeasureToolType.CONTINUOUS,
+                    MeasureToolType.RADIUS,
+                    MeasureToolType.DIAMETER,
+                    MeasureToolType.ARC,
+                    MeasureToolType.COORD_DIFFERENCE,
+                    MeasureToolType.ELEVATION -> UnitManager.formatDistance(record.primaryValue.toFloat(), config)
+
+                    MeasureToolType.ANGLE -> UnitManager.formatAngle(record.primaryValue.toFloat(), config)
+                    else -> record.primaryFormatted
+                }
+                record.copy(
+                    primaryFormatted = newFormatted,
+                    title = "${record.toolType.title} ($newFormatted)"
+                )
+            }
+
+            val updatedState = current.copy(
+                unitConfig = config,
+                savedMeasurements = updatedSaved,
+                toastMessage = "Units configured: ${config.unitSystem.shortName} (${config.displayDistanceUnit.symbol} / ${config.displayAreaUnit.symbol})"
+            )
+
             // Recalculate active measurement with new units
-            if (updated.activeMeasurement.pickedPoints.isNotEmpty()) {
-                val recalculated = recalculateMeasurement(updated.activeMeasurement, updated.unitConfig, updated.document)
-                updated.copy(activeMeasurement = recalculated)
+            if (updatedState.activeMeasurement.pickedPoints.isNotEmpty()) {
+                val recalculated = recalculateMeasurement(updatedState.activeMeasurement, updatedState.unitConfig, updatedState.document)
+                updatedState.copy(activeMeasurement = recalculated)
             } else {
-                updated
+                updatedState
             }
         }
     }
@@ -339,7 +406,8 @@ class CadViewModel : ViewModel() {
             layerVisibility = state.layerVisibility,
             viewport = state.viewport,
             settings = state.snapSettings,
-            referencePoint = refPoint
+            referencePoint = refPoint,
+            gridSettings = state.gridSettings
         )
 
         val targetPoint = snapResult?.point ?: worldPoint
@@ -367,7 +435,8 @@ class CadViewModel : ViewModel() {
                 layerVisibility = state.layerVisibility,
                 viewport = state.viewport,
                 settings = state.snapSettings,
-                referencePoint = refPoint
+                referencePoint = refPoint,
+                gridSettings = state.gridSettings
             )
             val effectivePoint = snapResult?.point ?: rawWorld
             _uiState.update { it.copy(cursorCadCoords = effectivePoint) }

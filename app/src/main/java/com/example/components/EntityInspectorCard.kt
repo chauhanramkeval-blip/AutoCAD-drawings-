@@ -20,6 +20,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.measurement.UnitConfig
+import com.example.measurement.UnitManager
 import com.example.parser.*
 import kotlin.math.max
 import kotlin.math.min
@@ -28,6 +30,7 @@ import kotlin.math.min
 fun EntitySelectionInspector(
     selectedEntities: List<DxfEntity>,
     layersMap: Map<String, DxfLayer>,
+    unitConfig: UnitConfig = UnitConfig(),
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -42,12 +45,14 @@ fun EntitySelectionInspector(
         SingleEntityInspectorCard(
             entity = entity,
             layerColor = layerColor,
+            unitConfig = unitConfig,
             onDismiss = onDismiss,
             modifier = modifier
         )
     } else {
         MultiEntityInspectorCard(
             entities = selectedEntities,
+            unitConfig = unitConfig,
             onDismiss = onDismiss,
             modifier = modifier
         )
@@ -57,6 +62,7 @@ fun EntitySelectionInspector(
 @Composable
 fun MultiEntityInspectorCard(
     entities: List<DxfEntity>,
+    unitConfig: UnitConfig = UnitConfig(),
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -78,6 +84,9 @@ fun MultiEntityInspectorCard(
 
     val width = if (minX.isFinite() && maxX.isFinite()) maxX - minX else 0f
     val height = if (minY.isFinite() && maxY.isFinite()) maxY - minY else 0f
+    val widthFormatted = UnitManager.formatDistance(width, unitConfig)
+    val heightFormatted = UnitManager.formatDistance(height, unitConfig)
+    val areaFormatted = UnitManager.formatArea(width * height, unitConfig)
 
     Card(
         modifier = modifier
@@ -89,7 +98,7 @@ fun MultiEntityInspectorCard(
         elevation = CardDefaults.cardElevation(8.dp),
         shape = MaterialTheme.shapes.medium
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -105,7 +114,7 @@ fun MultiEntityInspectorCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Marquee Selection (${entities.size} Entities)",
+                        text = "Selected Entities (${entities.size})",
                         style = MaterialTheme.typography.titleSmall.copy(
                             color = Color.White,
                             fontWeight = FontWeight.Bold
@@ -115,7 +124,7 @@ fun MultiEntityInspectorCard(
 
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.size(28.dp).testTag("btn_close_multi_inspector")
+                    modifier = Modifier.size(28.dp).testTag("btn_close_inspector")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -127,7 +136,7 @@ fun MultiEntityInspectorCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Bounding Extents
+            // Bounding Extents in active units
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -136,7 +145,7 @@ fun MultiEntityInspectorCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Area: %.1f × %.1f units".format(width, height),
+                    text = "Bounds: $widthFormatted × $heightFormatted ($areaFormatted)",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontFamily = FontFamily.Monospace,
                         color = Color(0xFFFFD600),
@@ -183,6 +192,7 @@ fun MultiEntityInspectorCard(
 fun SingleEntityInspectorCard(
     entity: DxfEntity,
     layerColor: Color,
+    unitConfig: UnitConfig = UnitConfig(),
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -284,7 +294,7 @@ fun SingleEntityInspectorCard(
                     .background(Color(0x22000000), shape = MaterialTheme.shapes.small)
                     .padding(10.dp)
             ) {
-                renderEntityGeometry(entity)
+                renderEntityGeometry(entity, unitConfig)
             }
         }
     }
@@ -295,19 +305,21 @@ fun SingleEntityInspectorCard(
 fun EntityInspectorCard(
     entity: DxfEntity,
     layerColor: Color,
+    unitConfig: UnitConfig = UnitConfig(),
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     SingleEntityInspectorCard(
         entity = entity,
         layerColor = layerColor,
+        unitConfig = unitConfig,
         onDismiss = onDismiss,
         modifier = modifier
     )
 }
 
 @Composable
-private fun renderEntityGeometry(entity: DxfEntity) {
+private fun renderEntityGeometry(entity: DxfEntity, unitConfig: UnitConfig) {
     val monoStyle = MaterialTheme.typography.bodySmall.copy(
         fontFamily = FontFamily.Monospace,
         color = Color(0xFFE0E0E0),
@@ -316,42 +328,54 @@ private fun renderEntityGeometry(entity: DxfEntity) {
 
     when (entity) {
         is DxfLine -> {
+            val startStr = UnitManager.formatCoordinate(entity.start, 0f, unitConfig)
+            val endStr = UnitManager.formatCoordinate(entity.end, 0f, unitConfig)
+            val lenStr = UnitManager.formatDistance(entity.length, unitConfig)
+
             Text("Start: (%.2f, %.2f)".format(entity.start.x, entity.start.y), style = monoStyle)
             Text("End:   (%.2f, %.2f)".format(entity.end.x, entity.end.y), style = monoStyle)
-            Text("Length: %.3f units".format(entity.length), style = monoStyle.copy(color = Color(0xFFFFD600), fontWeight = FontWeight.Bold))
+            Text("Length: $lenStr", style = monoStyle.copy(color = Color(0xFFFFD600), fontWeight = FontWeight.Bold))
         }
         is DxfCircle -> {
+            val rStr = UnitManager.formatDistance(entity.radius, unitConfig)
+            val cStr = UnitManager.formatDistance(entity.circumference, unitConfig)
+            val aStr = UnitManager.formatArea(entity.area, unitConfig)
+
             Text("Center: (%.2f, %.2f)".format(entity.center.x, entity.center.y), style = monoStyle)
-            Text("Radius: %.3f units".format(entity.radius), style = monoStyle.copy(color = Color(0xFFFFD600), fontWeight = FontWeight.Bold))
-            Text("Circumference: %.3f".format(entity.circumference), style = monoStyle)
-            Text("Area:   %.3f sq units".format(entity.area), style = monoStyle)
+            Text("Radius: $rStr", style = monoStyle.copy(color = Color(0xFFFFD600), fontWeight = FontWeight.Bold))
+            Text("Circumference: $cStr", style = monoStyle)
+            Text("Area:   $aStr", style = monoStyle)
         }
         is DxfArc -> {
+            val rStr = UnitManager.formatDistance(entity.radius, unitConfig)
             Text("Center: (%.2f, %.2f)".format(entity.center.x, entity.center.y), style = monoStyle)
-            Text("Radius: %.3f".format(entity.radius), style = monoStyle)
+            Text("Radius: $rStr", style = monoStyle)
             Text("Angles: %.1f° to %.1f°".format(entity.startAngleDeg, entity.endAngleDeg), style = monoStyle.copy(color = Color(0xFFFFD600)))
         }
         is DxfLwPolyline -> {
+            val lenStr = UnitManager.formatDistance(entity.totalLength, unitConfig)
             Text("Vertices: ${entity.vertices.size} points", style = monoStyle)
             Text("Closed:   ${if (entity.isClosed) "Yes" else "No"}", style = monoStyle)
-            Text("Length:   %.3f units".format(entity.totalLength), style = monoStyle.copy(color = Color(0xFFFFD600), fontWeight = FontWeight.Bold))
+            Text("Length:   $lenStr", style = monoStyle.copy(color = Color(0xFFFFD600), fontWeight = FontWeight.Bold))
         }
         is DxfPolyline -> {
             Text("Vertices: ${entity.vertices.size} points", style = monoStyle)
             Text("Closed:   ${if (entity.isClosed) "Yes" else "No"}", style = monoStyle)
         }
         is DxfText -> {
+            val hStr = UnitManager.formatDistance(entity.height, unitConfig)
             Text("Text Content: \"${entity.text}\"", style = monoStyle.copy(fontWeight = FontWeight.Bold, color = Color.White))
             Text("Position: (%.2f, %.2f)".format(entity.position.x, entity.position.y), style = monoStyle)
-            Text("Height:   %.2f units".format(entity.height), style = monoStyle)
+            Text("Height:   $hStr", style = monoStyle)
         }
         is DxfDimension -> {
             Text("Dim Text: ${entity.text.ifBlank { "Auto" }}", style = monoStyle.copy(fontWeight = FontWeight.Bold))
             Text("Def Point: (%.2f, %.2f)".format(entity.defPoint.x, entity.defPoint.y), style = monoStyle)
         }
         is DxfEllipse -> {
+            val rStr = UnitManager.formatDistance(entity.majorRadius, unitConfig)
             Text("Center: (%.2f, %.2f)".format(entity.center.x, entity.center.y), style = monoStyle)
-            Text("Major Radius: %.2f".format(entity.majorRadius), style = monoStyle)
+            Text("Major Radius: $rStr", style = monoStyle)
             Text("Minor Ratio:  %.2f".format(entity.minorRatio), style = monoStyle)
         }
         else -> {

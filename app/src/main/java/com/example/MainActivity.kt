@@ -114,6 +114,7 @@ fun CadViewerApp(cadViewModel: CadViewModel = androidx.lifecycle.viewmodel.compo
                     fileName = uiState.document.fileName,
                     entityCount = uiState.document.entities.size,
                     isDarkMode = uiState.isBlueprintTheme,
+                    unitConfig = uiState.unitConfig,
                     onToggleTheme = { cadViewModel.toggleTheme() },
                     onSelectAction = { action, payload ->
                         when (action) {
@@ -195,6 +196,15 @@ fun CadViewerApp(cadViewModel: CadViewModel = androidx.lifecycle.viewmodel.compo
                             "measure-units-settings" -> {
                                 cadViewModel.showUnitSettingsDialog(true)
                             }
+                            "grid-settings" -> {
+                                cadViewModel.showGridSettingsDialog(true)
+                            }
+                            "toggle-grid-snap" -> {
+                                cadViewModel.toggleGridSnap()
+                            }
+                            "toggle-axes" -> {
+                                cadViewModel.toggleAxes()
+                            }
                         }
                     }
                 )
@@ -209,6 +219,8 @@ fun CadViewerApp(cadViewModel: CadViewModel = androidx.lifecycle.viewmodel.compo
                 showAxes = uiState.showAxes,
                 visibleLayerCount = visibleLayerCount,
                 totalLayerCount = totalLayerCount,
+                unitConfig = uiState.unitConfig,
+                gridSettings = uiState.gridSettings,
                 onSetTool = { cadViewModel.setTool(it) },
                 onOpenLayers = { cadViewModel.showLayerSheet(true) },
                 onFitExtents = { cadViewModel.fitToExtents() },
@@ -216,6 +228,8 @@ fun CadViewerApp(cadViewModel: CadViewModel = androidx.lifecycle.viewmodel.compo
                 onZoomOut = { cadViewModel.zoomOut() },
                 onToggleGrid = { cadViewModel.toggleGrid() },
                 onToggleAxes = { cadViewModel.toggleAxes() },
+                onOpenUnitSettings = { cadViewModel.showUnitSettingsDialog(true) },
+                onOpenGridSettings = { cadViewModel.showGridSettingsDialog(true) },
                 modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
             )
         },
@@ -339,6 +353,7 @@ fun CadViewerApp(cadViewModel: CadViewModel = androidx.lifecycle.viewmodel.compo
                 EntitySelectionInspector(
                     selectedEntities = uiState.selectedEntities,
                     layersMap = uiState.document.layers,
+                    unitConfig = uiState.unitConfig,
                     onDismiss = { cadViewModel.clearSelection() }
                 )
             }
@@ -389,6 +404,18 @@ fun CadViewerApp(cadViewModel: CadViewModel = androidx.lifecycle.viewmodel.compo
                     unitConfig = uiState.unitConfig,
                     onUpdateUnitConfig = { cadViewModel.setUnitConfig(it) },
                     onDismiss = { cadViewModel.showUnitSettingsDialog(false) }
+                )
+            }
+
+            // Grid & Snap Settings Dialog
+            if (uiState.isGridSettingsVisible) {
+                GridSettingsDialog(
+                    gridSettings = uiState.gridSettings,
+                    unitConfig = uiState.unitConfig,
+                    viewportScale = uiState.viewport.scale,
+                    isBlueprintTheme = uiState.isBlueprintTheme,
+                    onSaveSettings = { cadViewModel.setGridSettings(it) },
+                    onDismiss = { cadViewModel.showGridSettingsDialog(false) }
                 )
             }
 
